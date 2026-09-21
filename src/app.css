@@ -19,35 +19,15 @@ body {
 
 @layer components {
   .page {
-    @apply mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center px-6 py-24;
+    @apply mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-6 py-16;
   }
 
-  .eyebrow {
-    @apply font-mono text-xs tracking-widest text-neutral-400 uppercase;
+  .switchers {
+    @apply mb-6 flex items-center justify-center gap-2;
   }
 
-  .title {
-    @apply mt-6 text-4xl font-medium tracking-[-0.02em] text-balance text-neutral-900 sm:text-5xl sm:leading-[1.05];
-  }
-
-  .lede {
-    @apply mt-4 max-w-md text-[17px] leading-7 text-neutral-500;
-  }
-
-  .meta {
-    @apply mt-8 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-neutral-500;
-  }
-
-  .dot {
-    @apply size-0.5 rounded-full bg-neutral-300;
-  }
-
-  .actions {
-    @apply mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-neutral-200 pt-8;
-  }
-
-  .section {
-    @apply mt-12 border-t border-neutral-200 pt-8;
+  .switcher {
+    @apply cursor-pointer rounded-full border-0 bg-transparent px-2 py-1 text-[13px] text-neutral-400 outline-none transition hover:text-neutral-900;
   }
 
   .h2 {
@@ -58,57 +38,8 @@ body {
     @apply mt-3 max-w-md text-[15px] leading-7 text-neutral-500;
   }
 
-  .link-inline {
-    @apply text-neutral-900 underline decoration-neutral-300 underline-offset-4 transition hover:decoration-neutral-500;
-  }
-
-  .pre {
-    @apply mt-4 max-w-md overflow-x-auto rounded-2xl border border-neutral-200 bg-neutral-950 px-4 py-3.5 font-mono text-[13px] leading-6 text-neutral-200;
-  }
-
-  .code {
-    @apply rounded-md border border-neutral-200 bg-neutral-100 px-1.5 py-0.5 font-mono text-[0.85em] text-neutral-700;
-  }
-
-  .pre .code,
-  pre .code {
-    @apply rounded-none border-0 bg-transparent p-0 text-inherit;
-  }
-
-  .steps {
-    @apply mt-5 flex max-w-md flex-col gap-4;
-  }
-
-  .steps li {
-    @apply flex flex-col gap-1 text-[15px] leading-7 text-neutral-500;
-  }
-
-  .step-title {
-    @apply font-medium text-neutral-900;
-  }
-
-  .step-body {
-    @apply text-neutral-500;
-  }
-
-  .note {
-    @apply mt-5 max-w-md rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-[13px] leading-6 text-neutral-500;
-  }
-
-  .footnote {
-    @apply mt-16 font-mono text-xs text-neutral-400;
-  }
-
-  .footer {
-    @apply mt-8 flex justify-center border-t border-neutral-200 pt-8;
-  }
-
-  .github-link {
-    @apply inline-flex items-center gap-2 font-mono text-xs text-neutral-400 transition hover:text-neutral-900;
-  }
-
-  .github-icon {
-    @apply size-4;
+  .manage {
+    @apply mt-10 text-center;
   }
 
   .btn-primary {
@@ -133,64 +64,32 @@ body {
 
   /* transit hero timer */
   .hero {
-    @apply mt-6 rounded-3xl border border-neutral-200 bg-neutral-50 px-6 py-8 text-center sm:py-10;
+    @apply px-2 py-4 text-center;
   }
 
   .hero-kicker {
-    @apply font-mono text-xs tracking-widest text-neutral-400 uppercase;
+    @apply text-sm text-neutral-400;
   }
 
   .hero-timer {
-    @apply mt-2 font-mono text-6xl font-medium tracking-tight text-neutral-900 tabular-nums sm:text-7xl;
+    @apply mt-1 font-mono text-7xl font-medium tracking-tight text-neutral-900 tabular-nums sm:text-8xl;
   }
 
   .hero-title {
-    @apply mt-3 text-lg font-medium tracking-tight text-neutral-900;
+    @apply mt-3 text-sm text-neutral-400;
   }
 
   .hero-sub {
     @apply mx-auto mt-1 max-w-sm text-sm leading-6 text-neutral-500;
   }
 
-  .hero-meta {
-    @apply mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[13px] text-neutral-500;
-  }
-
-  .hero-leaveby {
-    @apply mt-2 text-sm text-neutral-600;
-  }
-
-  .hero-leaveby strong {
-    @apply font-semibold text-neutral-900 tabular-nums;
-  }
-
-  .missed {
-    @apply mx-auto mt-2 max-w-sm rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] leading-5 text-amber-800;
-  }
-
   .hero-actions {
     @apply mt-6 flex flex-col items-center gap-2;
   }
 
-  .hint {
-    @apply text-xs text-neutral-400;
-  }
-
   /* forms + manage */
-  .chip {
-    @apply rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[13px] text-neutral-500;
-  }
-
-  .field-inline {
-    @apply inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white py-1 pr-1 pl-4 text-[13px] text-neutral-500;
-  }
-
-  .select {
-    @apply max-w-44 cursor-pointer rounded-full bg-neutral-900 py-1.5 pr-3 pl-3 text-[13px] font-medium text-white outline-none;
-  }
-
   .card {
-    @apply mt-4 rounded-3xl border border-neutral-200 bg-white p-5;
+    @apply mt-4 rounded-3xl border border-neutral-200 bg-white p-5 text-left;
   }
 
   .card-head {
@@ -253,16 +152,32 @@ body {
     @apply mt-2 text-[13px] text-red-600;
   }
 
-  .manage-toggle {
-    @apply flex w-full items-center justify-between rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm font-medium text-neutral-700 transition hover:border-neutral-300 hover:text-neutral-900;
-  }
-
-  .manage-toggle .count {
-    @apply rounded-full bg-neutral-100 px-2.5 py-0.5 font-mono text-xs text-neutral-500;
-  }
-
   .link-quiet {
-    @apply text-sm text-neutral-500 underline decoration-neutral-200 underline-offset-4 transition hover:text-neutral-900 hover:decoration-neutral-400;
+    @apply text-sm text-neutral-400 transition hover:text-neutral-900;
+  }
+
+  .info-wrap {
+    @apply relative flex justify-center;
+  }
+
+  .info-text {
+    @apply rounded-full px-3 py-1 text-sm font-medium text-neutral-500 transition hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900;
+  }
+
+  .about-card-top {
+    @apply absolute top-full z-50 mt-1 w-56 rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-lg;
+  }
+
+  .about-title {
+    @apply text-base font-medium tracking-tight text-neutral-900;
+  }
+
+  .about-sub {
+    @apply mt-1 text-[13px] leading-5 text-neutral-500;
+  }
+
+  .about-link {
+    @apply mt-2 inline-block text-[13px] font-medium text-neutral-900 underline decoration-neutral-300 underline-offset-4 transition hover:decoration-neutral-900;
   }
 
   .toast {

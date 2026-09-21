@@ -27,6 +27,7 @@
   let mode = $state<"leave" | "transit">("leave");
   let now = $state(new Date());
   let manageOpen = $state(false);
+  let aboutOpen = $state(false);
   let newLocationName = $state("");
 
   // location rename editor
@@ -108,11 +109,11 @@
 
   let plan: Plan = $derived.by(() => {
     const st = selectedStation;
-    if (!st) return emptyPlan("Add a station to start the countdown");
+    if (!st) return emptyPlan("Add a station below to start");
     const freq = Math.floor(Number(st.frequencyMinutes));
     const walk = Math.max(0, Number(st.walkMinutes) || 0);
     if (!Number.isFinite(freq) || freq <= 0 || parseTimeToMinutes(st.firstDeparture) === null) {
-      return emptyPlan("Fix this station's timetable to start the countdown");
+      return emptyPlan("Fix the timetable below to start");
     }
 
     const immediate = nextDeparture(now, st.firstDeparture, freq);
@@ -132,12 +133,33 @@
         missed,
         countdownMs: ms,
         countdownLabel: formatCountdown(ms),
-        subLabel: `next transit at ${formatClock(immediate)} · every ${freq} min`,
+        subLabel: `at ${formatClock(immediate)}`,
       };
     }
 
     const ms = Math.max(0, leaveBy.getTime() - now.getTime());
-    const urgent = ms <= 60_000;
+    if (missed) {
+      return {
+        immediate,
+        catchable,
+        leaveBy,
+        missed,
+        countdownMs: ms,
+        countdownLabel: formatCountdown(ms),
+        subLabel: `missed ${formatClock(immediate)} · leave by ${formatClock(leaveBy)} for ${formatClock(catchable)}`,
+      };
+    }
+    if (ms <= 60_000) {
+      return {
+        immediate,
+        catchable,
+        leaveBy,
+        missed,
+        countdownMs: ms,
+        countdownLabel: formatCountdown(ms),
+        subLabel: `leave now · ${formatClock(catchable)}`,
+      };
+    }
     return {
       immediate,
       catchable,
@@ -145,22 +167,21 @@
       missed,
       countdownMs: ms,
       countdownLabel: formatCountdown(ms),
-      subLabel: missed
-        ? `missed the ${formatClock(immediate)} — next catchable at ${formatClock(catchable)}`
-        : urgent
-          ? `leave now — transit at ${formatClock(catchable)}`
-          : `to catch the ${formatClock(catchable)} · ${formatWalk(walk)} on foot`,
+      subLabel: `leave by ${formatClock(leaveBy)} · ${formatClock(catchable)}`,
     };
   });
 
-  let heroKicker: string = $derived(
-    !selectedLocation || !selectedStation ? "transit" : mode === "leave" ? "leave in" : "transit in",
-  );
+  let heroKicker: string = $derived(mode === "leave" ? "leave in" : "transit in");
   let heroTitle: string = $derived(
     !selectedLocation || !selectedStation
-      ? "No station yet"
+      ? ""
       : `${selectedLocation.name || "Unnamed location"} → ${selectedStation.name || "Unnamed station"}`,
   );
+
+  // Only show switchers when there's actually a choice to make.
+  let showLocationSwitcher: boolean = $derived(locations.length > 1);
+  let showStationSwitcher: boolean = $derived((selectedLocation?.stations.length ?? 0) > 1);
+  let showTitle: boolean = $derived(showLocationSwitcher || showStationSwitcher);
 
   // ---------- location CRUD ----------
   function addLocation() {
@@ -253,27 +274,15 @@
     );
     editingStationKey = null;
   }
-
-  function useStation(locId: string, stationId: string) {
-    selectedLocationId = locId;
-    selectedStationId = stationId;
-    mode = "leave";
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
 </script>
 
 <main class="page">
-  <p class="eyebrow">transit · leave on time</p>
-
-  <!-- selectors -->
-  <div class="mt-6 flex flex-wrap gap-2">
-    {#if locations.length === 0}
-      <span class="chip">no locations yet</span>
-    {:else}
-      <label class="field-inline">
-        <span>From</span>
+  {#if showLocationSwitcher || showStationSwitcher}
+    <div class="switchers">
+      {#if showLocationSwitcher}
         <select
-          class="select"
+          class="switcher"
+          aria-label="Location"
           value={selectedLocation?.id ?? ""}
           onchange={(e) => {
             selectedLocationId = e.currentTarget.value || null;
@@ -282,58 +291,61 @@
           }}
         >
           {#each locations as loc (loc.id)}
-            <option value={loc.id}>{loc.name || "Unnamed location"}</option>
+            <option value={loc.id}>{loc.name || "Unnamed"}</option>
           {/each}
         </select>
-      </label>
-      {#if selectedLocation && selectedLocation.stations.length > 0}
-        <label class="field-inline">
-          <span>Destination</span>
-          <select
-            class="select"
-            value={selectedStation?.id ?? ""}
-            onchange={(e) => {
-              selectedStationId = e.currentTarget.value || null;
-              mode = "leave";
-            }}
-          >
-            {#each selectedLocation.stations as st (st.id)}
-              <option value={st.id}>{st.name || "Unnamed station"}</option>
-            {/each}
-          </select>
-        </label>
       {/if}
-    {/if}
-  </div>
+      {#if showStationSwitcher && selectedLocation}
+        <select
+          class="switcher"
+          aria-label="Station"
+          value={selectedStation?.id ?? ""}
+          onchange={(e) => {
+            selectedStationId = e.currentTarget.value || null;
+            mode = "leave";
+          }}
+        >
+          {#each selectedLocation.stations as st (st.id)}
+            <option value={st.id}>{st.name || "Unnamed"}</option>
+          {/each}
+        </select>
+      {/if}
+    </div>
+  {/if}
 
   <!-- hero timer -->
+  <div class="info-wrap">
+    <button
+      type="button"
+      class="info-text"
+      aria-label="About Transit"
+      aria-expanded={aboutOpen}
+      onclick={() => (aboutOpen = !aboutOpen)}
+    >
+      info
+    </button>
+    {#if aboutOpen}
+      <div class="about-card-top" role="dialog" aria-label="About Transit">
+        <p class="about-title">Transit</p>
+        <p class="about-sub">Built by Giuseppe Della Vedova</p>
+        <a
+          class="about-link"
+          href="https://github.com/gi-dellav/transit"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          GitHub
+        </a>
+      </div>
+    {/if}
+  </div>
   <section aria-live="polite" class="hero">
     <p class="hero-kicker">{heroKicker}</p>
     <p class="hero-timer">{plan.countdownLabel}</p>
-    <h1 class="hero-title">{heroTitle}</h1>
-    <p class="hero-sub">{plan.subLabel}</p>
-
-    {#if selectedStation}
-      <div class="hero-meta">
-        <span>🚶 {formatWalk(selectedStation.walkMinutes)}</span>
-        <span aria-hidden="true" class="dot"></span>
-        <span>🕐 first {selectedStation.firstDeparture}</span>
-        <span aria-hidden="true" class="dot"></span>
-        <span>🔁 every {selectedStation.frequencyMinutes} min</span>
-      </div>
-      {#if plan.leaveBy && mode === "leave"}
-        <p class="hero-leaveby">
-          leave by <strong>{formatClock(plan.leaveBy)}</strong>
-          {#if plan.catchable} · transit at <strong>{formatClock(plan.catchable)}</strong>{/if}
-        </p>
-      {/if}
-      {#if plan.missed && mode === "leave"}
-        <p class="missed">
-          You can't make the {plan.immediate ? formatClock(plan.immediate) : ""} on foot — showing
-          the next one.
-        </p>
-      {/if}
+    {#if showTitle}
+      <h1 class="hero-title">{heroTitle}</h1>
     {/if}
+    <p class="hero-sub">{plan.subLabel}</p>
 
     <div class="hero-actions">
       {#if mode === "leave"}
@@ -345,12 +357,8 @@
         >
           Start
         </button>
-        <span class="hint">Start switches to “next transit in …”</span>
       {:else}
-        <button type="button" class="btn-primary" onclick={() => (mode = "leave")}>
-          Back to leave timer
-        </button>
-        <span class="hint">Showing arrival countdown — you're on your way</span>
+        <button type="button" class="btn-primary" onclick={() => (mode = "leave")}> Back </button>
       {/if}
     </div>
   </section>
@@ -358,11 +366,7 @@
   <!-- empty / onboarding -->
   {#if locations.length === 0}
     <section class="card">
-      <h2 class="h2">Set up your first location</h2>
-      <p class="body">
-        Locations are places you leave from (home, office…). Each one holds the stations you can
-        walk to, with walk time + timetable.
-      </p>
+      <h2 class="h2">Where do you start your journey?</h2>
       <div class="row">
         <input
           class="input"
@@ -370,33 +374,25 @@
           bind:value={newLocationName}
           onkeydown={(e) => e.key === "Enter" && addLocation()}
         />
-        <button type="button" class="btn-solid" onclick={addLocation}>Add location</button>
+        <button type="button" class="btn-solid" onclick={addLocation}>Add</button>
       </div>
       <div class="row">
-        <button type="button" class="link-quiet" onclick={loadDemo}>or load a demo location</button>
+        <button type="button" class="link-quiet" onclick={loadDemo}>or load demo</button>
       </div>
     </section>
   {/if}
 
   <!-- manage -->
-  <section class="section">
-    <button
-      type="button"
-      class="manage-toggle"
-      aria-expanded={manageOpen}
-      onclick={() => (manageOpen = !manageOpen)}
-    >
-      <span>{manageOpen ? "▾" : "▸"} Manage locations & stations</span>
-      <span class="count"
-        >{locations.length} {locations.length === 1 ? "location" : "locations"}</span
-      >
+  <section class="manage">
+    <button type="button" class="link-quiet" aria-expanded={manageOpen} onclick={() => (manageOpen = !manageOpen)}>
+      {manageOpen ? "Done" : "Edit"}
     </button>
 
     {#if manageOpen}
       <div class="row mt-4">
         <input
           class="input"
-          placeholder="New location name"
+          placeholder="New location"
           bind:value={newLocationName}
           onkeydown={(e) => e.key === "Enter" && addLocation()}
         />
@@ -425,7 +421,7 @@
                 </button>
               </div>
             {:else}
-              <h3 class="card-title">{loc.name || "Unnamed location"}</h3>
+              <h3 class="card-title">{loc.name || "Unnamed"}</h3>
               <div class="card-tools">
                 <button type="button" class="btn-quiet" onclick={() => startRenameLocation(loc)}>
                   Rename
@@ -437,10 +433,6 @@
             {/if}
           </div>
 
-          {#if loc.stations.length === 0 && editingStationKey !== `${loc.id}:new`}
-            <p class="body">No stations yet — add the stop you walk to.</p>
-          {/if}
-
           <ul class="station-list">
             {#each loc.stations as st (st.id)}
               {@const key = `${loc.id}:${st.id}`}
@@ -448,7 +440,7 @@
                 {#if editingStationKey === key}
                   <div class="form-grid">
                     <label class="field">
-                      <span>Station name</span>
+                      <span>Name</span>
                       <input class="input" bind:value={draftName} placeholder="e.g. Main station" />
                     </label>
                     <label class="field">
@@ -456,7 +448,7 @@
                       <input class="input" inputmode="numeric" bind:value={draftWalk} />
                     </label>
                     <label class="field">
-                      <span>Timetable starts</span>
+                      <span>Starts</span>
                       <input class="input" type="time" bind:value={draftFirst} />
                     </label>
                     <label class="field">
@@ -469,7 +461,7 @@
                   {/if}
                   <div class="row">
                     <button type="button" class="btn-solid" onclick={() => saveStation(loc.id)}>
-                      Save station
+                      Save
                     </button>
                     <button type="button" class="btn-quiet" onclick={() => (editingStationKey = null)}>
                       Cancel
@@ -485,24 +477,14 @@
                 {:else}
                   <div class="station-row">
                     <div>
-                      <p class="station-name">{st.name || "Unnamed station"}</p>
+                      <p class="station-name">{st.name || "Unnamed"}</p>
                       <p class="station-sub">
-                        🚶 {formatWalk(st.walkMinutes)} · first {st.firstDeparture} · every {st.frequencyMinutes}
-                        min
+                        {formatWalk(st.walkMinutes)} · {st.firstDeparture} · /{st.frequencyMinutes}
                       </p>
                     </div>
-                    <div class="card-tools">
-                      <button
-                        type="button"
-                        class="btn-quiet"
-                        onclick={() => useStation(loc.id, st.id)}
-                      >
-                        Use
-                      </button>
-                      <button type="button" class="btn-quiet" onclick={() => openEditStation(loc.id, st)}>
-                        Edit
-                      </button>
-                    </div>
+                    <button type="button" class="btn-quiet" onclick={() => openEditStation(loc.id, st)}>
+                      Edit
+                    </button>
                   </div>
                 {/if}
               </li>
@@ -513,7 +495,7 @@
             <div class="station station-edit">
               <div class="form-grid">
                 <label class="field">
-                  <span>Station name</span>
+                  <span>Name</span>
                   <input class="input" bind:value={draftName} placeholder="e.g. Main station" />
                 </label>
                 <label class="field">
@@ -521,7 +503,7 @@
                   <input class="input" inputmode="numeric" bind:value={draftWalk} />
                 </label>
                 <label class="field">
-                  <span>Timetable starts</span>
+                  <span>Starts</span>
                   <input class="input" type="time" bind:value={draftFirst} />
                 </label>
                 <label class="field">
@@ -534,7 +516,7 @@
               {/if}
               <div class="row">
                 <button type="button" class="btn-solid" onclick={() => saveStation(loc.id)}>
-                  Add station
+                  Add
                 </button>
                 <button type="button" class="btn-quiet" onclick={() => (editingStationKey = null)}>
                   Cancel
@@ -550,8 +532,15 @@
       {/each}
     {/if}
   </section>
-
-  <p class="footnote">times are local · data stays in your browser</p>
 </main>
+
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key === "Escape") aboutOpen = false;
+  }}
+  onclick={(e) => {
+    if (aboutOpen && !(e.target as HTMLElement).closest(".info-wrap")) aboutOpen = false;
+  }}
+/>
 
 <PwaUpdate />
