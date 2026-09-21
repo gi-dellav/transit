@@ -23,7 +23,7 @@ body {
   }
 
   .switchers {
-    @apply mb-6 flex items-center justify-center gap-2;
+    @apply mb-2 flex items-center justify-center gap-2;
   }
 
   .switcher {
@@ -157,7 +157,7 @@ body {
   }
 
   .info-wrap {
-    @apply relative flex justify-center;
+    @apply relative mb-4 flex justify-center;
   }
 
   .info-text {
@@ -178,6 +178,18 @@ body {
 
   .about-link {
     @apply mt-2 inline-block text-[13px] font-medium text-neutral-900 underline decoration-neutral-300 underline-offset-4 transition hover:decoration-neutral-900;
+  }
+
+  .about-links {
+    @apply flex items-center gap-4;
+  }
+
+  .notify-toggle {
+    @apply rounded-full px-3 py-1 text-[13px] font-medium text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-900;
+  }
+
+  .hint {
+    @apply text-xs text-neutral-400;
   }
 
   .toast {

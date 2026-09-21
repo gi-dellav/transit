@@ -24,6 +24,9 @@ export default defineConfig(() => {
       svelte(),
       tailwindcss(),
       VitePWA({
+        strategies: "injectManifest",
+        srcDir: "src",
+        filename: "sw.ts",
         registerType: "autoUpdate",
         includeAssets: ["favicon.svg", "apple-touch-icon.png"],
         manifest: {
@@ -56,7 +59,6 @@ export default defineConfig(() => {
         },
         workbox: {
           globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
-          cleanupOutdatedCaches: true,
         },
         devOptions: {
           enabled: false,

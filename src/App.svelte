@@ -30,6 +30,12 @@
   let aboutOpen = $state(false);
   let newLocationName = $state("");
 
+  // browser notification reminder for leaveBy (opt-in, persisted)
+  const notifySupported = typeof window !== "undefined" && "Notification" in window;
+  let notifyArmed = $state(false);
+  let notifyDenied = $state(false);
+  let notifiedLeaveBy = $state(0);
+
   // location rename editor
   let editingLocationId = $state<string | null>(null);
   let editingLocationName = $state("");
@@ -47,6 +53,135 @@
   $effect(() => {
     const t = setInterval(() => (now = new Date()), 500);
     return () => clearInterval(t);
+  });
+
+  // restore notification choice
+  $effect(() => {
+    if (!notifySupported) return;
+    try {
+      notifyDenied = Notification.permission === "denied";
+      notifyArmed = localStorage.getItem("transit.notify") === "on";
+    } catch {
+      // ignore
+    }
+  });
+
+  async function toggleNotify() {
+    if (!notifySupported) return;
+    if (!notifyArmed) {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") {
+        notifyArmed = false;
+        notifyDenied = Notification.permission === "denied";
+        try {
+          localStorage.setItem("transit.notify", "off");
+        } catch {
+          // ignore
+        }
+        return;
+      }
+      notifiedLeaveBy = 0;
+      notifyDenied = false;
+    }
+    notifyArmed = !notifyArmed;
+    try {
+      localStorage.setItem("transit.notify", notifyArmed ? "on" : "off");
+    } catch {
+      // ignore
+    }
+    // Turning off cancels any trigger-scheduled notification + pending timer.
+    if (!notifyArmed) {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const existing = await reg.getNotifications({ tag: "transit-leaveby" });
+        existing.forEach((n) => n.close());
+      } catch {
+        // ignore (no SW / unsupported)
+      }
+    }
+  }
+
+  async function showLeaveNotification(title: string, body: string) {
+    // Preferred path: via the service worker so the notification can outlive
+    // the tab and clicking it refocuses the app (see src/sw.ts).
+    try {
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        await reg.showNotification(
+          title,
+          {
+            body,
+            tag: "transit-leaveby",
+            icon: `${import.meta.env.BASE_URL}pwa-192x192.png`,
+            badge: `${import.meta.env.BASE_URL}pwa-192x192.png`,
+            renotify: true,
+          } as NotificationOptions,
+        );
+        return;
+      }
+    } catch {
+      // fall through to the page-context Notification below
+    }
+    try {
+      new Notification(title, { body, tag: "transit-leaveby" });
+    } catch {
+      // ignore (e.g. permission revoked mid-session)
+    }
+  }
+
+  // fire the leaveBy notification once per departure
+  $effect(() => {
+    if (!notifyArmed || !notifySupported || Notification.permission !== "granted") return;
+    if (mode !== "leave" || !plan.leaveBy || plan.leaveBy.getTime() === notifiedLeaveBy) return;
+    const delay = plan.leaveBy.getTime() - Date.now();
+    if (!Number.isFinite(delay) || delay <= 0) return;
+    const id = plan.leaveBy.getTime();
+    const target = plan.catchable ? formatClock(plan.catchable) : "";
+    const route =
+      selectedLocation && selectedStation
+        ? ` · ${selectedLocation.name || "Unnamed"} → ${selectedStation.name || "Unnamed"}`
+        : "";
+    const title = "Leave now";
+    const body = target ? `transit at ${target}${route}` : `time to leave${route}`;
+
+    // Where supported (Chrome's Notification Triggers API), schedule directly
+    // in the service worker so it fires even if this tab is closed.
+    const TimestampTrigger = (window as unknown as { TimestampTrigger?: unknown }).TimestampTrigger;
+    if (typeof TimestampTrigger === "function") {
+      let cancelled = false;
+      (async () => {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          if (cancelled) return;
+          await reg.showNotification(
+            title,
+            {
+              body,
+              tag: "transit-leaveby",
+              icon: `${import.meta.env.BASE_URL}pwa-192x192.png`,
+              badge: `${import.meta.env.BASE_URL}pwa-192x192.png`,
+              renotify: true,
+              // showTrigger is part of the experimental Notification Triggers
+              // API (Chrome-only), not yet in TS DOM libs.
+              showTrigger: new (TimestampTrigger as new (t: number) => unknown)(id),
+            } as NotificationOptions,
+          );
+          notifiedLeaveBy = id;
+        } catch {
+          // Trigger scheduling failed (e.g. too far in future) — fall back
+          // to the in-page timer below by resetting so a retry can occur.
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const timer = setTimeout(() => {
+      notifiedLeaveBy = id;
+      void showLeaveNotification(title, body);
+    }, Math.min(delay, 2_147_483_647));
+    return () => clearTimeout(timer);
   });
 
   // persist
@@ -277,6 +412,43 @@
 </script>
 
 <main class="page">
+  <!-- info -->
+  <div class="info-wrap">
+    <button
+      type="button"
+      class="info-text"
+      aria-label="About Transit"
+      aria-expanded={aboutOpen}
+      onclick={() => (aboutOpen = !aboutOpen)}
+    >
+      info
+    </button>
+    {#if aboutOpen}
+      <div class="about-card-top" role="dialog" aria-label="About Transit">
+        <p class="about-title">Transit</p>
+        <p class="about-sub">Built by Giuseppe Della Vedova</p>
+        <div class="about-links">
+          <a
+            class="about-link"
+            href="https://github.com/gi-dellav/transit"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub
+          </a>
+          <a
+            class="about-link"
+            href="https://www.linkedin.com/in/giuseppe-della-vedova-a2890a413/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            LinkedIn
+          </a>
+        </div>
+      </div>
+    {/if}
+  </div>
+
   {#if showLocationSwitcher || showStationSwitcher}
     <div class="switchers">
       {#if showLocationSwitcher}
@@ -314,31 +486,6 @@
   {/if}
 
   <!-- hero timer -->
-  <div class="info-wrap">
-    <button
-      type="button"
-      class="info-text"
-      aria-label="About Transit"
-      aria-expanded={aboutOpen}
-      onclick={() => (aboutOpen = !aboutOpen)}
-    >
-      info
-    </button>
-    {#if aboutOpen}
-      <div class="about-card-top" role="dialog" aria-label="About Transit">
-        <p class="about-title">Transit</p>
-        <p class="about-sub">Built by Giuseppe Della Vedova</p>
-        <a
-          class="about-link"
-          href="https://github.com/gi-dellav/transit"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          GitHub
-        </a>
-      </div>
-    {/if}
-  </div>
   <section aria-live="polite" class="hero">
     <p class="hero-kicker">{heroKicker}</p>
     <p class="hero-timer">{plan.countdownLabel}</p>
@@ -357,6 +504,19 @@
         >
           Start
         </button>
+        {#if notifySupported && selectedStation && plan.leaveBy}
+          <button
+            type="button"
+            class="notify-toggle"
+            aria-pressed={notifyArmed}
+            onclick={toggleNotify}
+          >
+            {notifyArmed ? "reminder on" : "remind me"}
+          </button>
+          {#if notifyDenied && !notifyArmed}
+            <p class="hint">notifications blocked — allow them in your browser settings</p>
+          {/if}
+        {/if}
       {:else}
         <button type="button" class="btn-primary" onclick={() => (mode = "leave")}> Back </button>
       {/if}
