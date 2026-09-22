@@ -1,12 +1,22 @@
+export type ScheduleKind = "frequency" | "custom";
+
 export interface Station {
   id: string;
   name: string;
   /** minutes on foot from the location to the stop */
   walkMinutes: number;
-  /** timetable anchor, "HH:MM" 24h */
+  /** timetable anchor, "HH:MM" 24h (used when scheduleKind is "frequency") */
   firstDeparture: string;
-  /** headway in minutes */
+  /** headway in minutes (used when scheduleKind is "frequency") */
   frequencyMinutes: number;
+  /**
+   * Which timetable to use. Defaults to "frequency" when missing so existing
+   * saved stations keep working. Set to "custom" for sparse routes with an
+   * explicit set of daily departure times.
+   */
+  scheduleKind?: ScheduleKind;
+  /** daily departure times as "HH:MM", used when scheduleKind is "custom" */
+  customDepartures?: string[];
 }
 
 export interface TransitLocation {
@@ -29,7 +39,20 @@ export function loadLocations(): TransitLocation[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as TransitLocation[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((l) => l && typeof l.name === "string" && Array.isArray(l.stations));
+    return parsed
+      .filter((l) => l && typeof l.name === "string" && Array.isArray(l.stations))
+      .map((l) => ({
+        ...l,
+        stations: l.stations
+          .filter((s) => s && typeof s.id === "string")
+          .map((s) => ({
+            ...s,
+            scheduleKind: s.scheduleKind === "custom" ? "custom" : "frequency",
+            customDepartures: Array.isArray(s.customDepartures)
+              ? s.customDepartures.filter((t) => typeof t === "string")
+              : [],
+          })),
+      }));
   } catch {
     return [];
   }

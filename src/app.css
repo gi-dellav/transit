@@ -140,6 +140,26 @@ body {
     @apply col-span-2;
   }
 
+  .field-span {
+    @apply col-span-2;
+  }
+
+  .segment {
+    @apply flex gap-1 rounded-xl bg-neutral-100 p-1;
+  }
+
+  .segment-btn {
+    @apply flex-1 rounded-lg px-3 py-1.5 text-[13px] font-medium text-neutral-500 transition hover:text-neutral-900;
+  }
+
+  .segment-btn[aria-pressed="true"] {
+    @apply bg-white text-neutral-900 shadow-sm;
+  }
+
+  .input-area {
+    @apply resize-y leading-6;
+  }
+
   .input {
     @apply w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 outline-none placeholder:text-neutral-300 focus:border-neutral-400;
   }

@@ -3,8 +3,11 @@
   import {
     formatClock,
     formatCountdown,
+    formatMinutesToTime,
     formatWalk,
-    nextDeparture,
+    isTimetableValid,
+    nextDepartureForStation,
+    normalizeCustomDepartures,
     clampInt,
     parseTimeToMinutes,
   } from "./lib/time";
@@ -47,7 +50,21 @@
   let draftWalk = $state("8");
   let draftFirst = $state("05:30");
   let draftFreq = $state("15");
+  let draftScheduleKind = $state<"frequency" | "custom">("frequency");
+  let draftCustom = $state("");
   let draftError = $state<string | null>(null);
+
+  /** Human-readable summary of a station's timetable. */
+  function describeStation(st: Station): string {
+    if ((st.scheduleKind ?? "frequency") === "custom") {
+      const times = normalizeCustomDepartures(st.customDepartures ?? []).map(formatMinutesToTime);
+      if (times.length === 0) return "custom times missing";
+      const shown = times.slice(0, 3).join(", ");
+      const extra = times.length > 3 ? ` +${times.length - 3}` : "";
+      return `${shown}${extra}`;
+    }
+    return `${st.firstDeparture} · /${st.frequencyMinutes}`;
+  }
 
   // ticking clock
   $effect(() => {
@@ -245,15 +262,14 @@
   let plan: Plan = $derived.by(() => {
     const st = selectedStation;
     if (!st) return emptyPlan("Add a station below to start");
-    const freq = Math.floor(Number(st.frequencyMinutes));
     const walk = Math.max(0, Number(st.walkMinutes) || 0);
-    if (!Number.isFinite(freq) || freq <= 0 || parseTimeToMinutes(st.firstDeparture) === null) {
+    if (!isTimetableValid(st)) {
       return emptyPlan("Fix the timetable below to start");
     }
 
-    const immediate = nextDeparture(now, st.firstDeparture, freq);
+    const immediate = nextDepartureForStation(now, st);
     const arrivalNeed = new Date(now.getTime() + walk * 60_000);
-    const catchable = nextDeparture(arrivalNeed, st.firstDeparture, freq);
+    const catchable = nextDepartureForStation(arrivalNeed, st);
     if (!immediate || !catchable) return emptyPlan("Could not compute departures");
 
     const missed = catchable.getTime() !== immediate.getTime();
@@ -349,11 +365,19 @@
   }
 
   // ---------- station CRUD ----------
+  function draftCustomTimes(): string[] {
+    return draftCustom
+      .split(/[\s,;]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+  }
   function openNewStation(locId: string) {
     draftName = "";
     draftWalk = "8";
     draftFirst = "05:30";
     draftFreq = "15";
+    draftScheduleKind = "frequency";
+    draftCustom = "";
     draftError = null;
     editingStationKey = `${locId}:new`;
   }
@@ -362,6 +386,10 @@
     draftWalk = String(st.walkMinutes);
     draftFirst = st.firstDeparture;
     draftFreq = String(st.frequencyMinutes);
+    draftScheduleKind = st.scheduleKind === "custom" ? "custom" : "frequency";
+    draftCustom = normalizeCustomDepartures(st.customDepartures ?? [])
+      .map(formatMinutesToTime)
+      .join(", ");
     draftError = null;
     editingStationKey = `${locId}:${st.id}`;
   }
@@ -369,6 +397,13 @@
     if (!draftName.trim()) return "Give the station a name.";
     const walk = Number(draftWalk);
     if (!Number.isFinite(walk) || walk < 0 || walk > 600) return "Walk time must be 0–600 minutes.";
+    if (draftScheduleKind === "custom") {
+      const raw = draftCustomTimes();
+      if (raw.length === 0) return "Add at least one departure time (HH:MM).";
+      const bad = raw.find((t) => parseTimeToMinutes(t) === null);
+      if (bad) return `“${bad}” is not a valid HH:MM time (24h).`;
+      return null;
+    }
     if (parseTimeToMinutes(draftFirst) === null) return "Timetable start must be HH:MM (24h).";
     const freq = Number(draftFreq);
     if (!Number.isFinite(freq) || freq < 1 || freq > 720) return "Frequency must be 1–720 minutes.";
@@ -389,6 +424,11 @@
       walkMinutes: clampInt(Number(draftWalk), 0, 600, 8),
       firstDeparture: draftFirst.trim(),
       frequencyMinutes: clampInt(Number(draftFreq), 1, 720, 15),
+      scheduleKind: draftScheduleKind,
+      customDepartures:
+        draftScheduleKind === "custom"
+          ? normalizeCustomDepartures(draftCustomTimes()).map(formatMinutesToTime)
+          : [],
     };
     locations = locations.map((l) => {
       if (l.id !== locId) return l;
@@ -607,14 +647,47 @@
                       <span>Walk (min)</span>
                       <input class="input" inputmode="numeric" bind:value={draftWalk} />
                     </label>
-                    <label class="field">
-                      <span>Starts</span>
-                      <input class="input" type="time" bind:value={draftFirst} />
+                    <label class="field field-span">
+                      <span>Timetable</span>
+                      <div class="segment" role="radiogroup" aria-label="Timetable type">
+                        <button
+                          type="button"
+                          class="segment-btn"
+                          aria-pressed={draftScheduleKind === "frequency"}
+                          onclick={() => (draftScheduleKind = "frequency")}
+                        >
+                          Every X min
+                        </button>
+                        <button
+                          type="button"
+                          class="segment-btn"
+                          aria-pressed={draftScheduleKind === "custom"}
+                          onclick={() => (draftScheduleKind = "custom")}
+                        >
+                          Set times
+                        </button>
+                      </div>
                     </label>
-                    <label class="field">
-                      <span>Every (min)</span>
-                      <input class="input" inputmode="numeric" bind:value={draftFreq} />
-                    </label>
+                    {#if draftScheduleKind === "frequency"}
+                      <label class="field">
+                        <span>Starts</span>
+                        <input class="input" type="time" bind:value={draftFirst} />
+                      </label>
+                      <label class="field">
+                        <span>Every (min)</span>
+                        <input class="input" inputmode="numeric" bind:value={draftFreq} />
+                      </label>
+                    {:else}
+                      <label class="field field-span">
+                        <span>Departures (HH:MM, comma separated)</span>
+                        <textarea
+                          class="input input-area"
+                          rows="2"
+                          placeholder="e.g. 06:12, 07:05, 18:40"
+                          bind:value={draftCustom}
+                        ></textarea>
+                      </label>
+                    {/if}
                   </div>
                   {#if draftError}
                     <p class="form-error">{draftError}</p>
@@ -639,7 +712,7 @@
                     <div>
                       <p class="station-name">{st.name || "Unnamed"}</p>
                       <p class="station-sub">
-                        {formatWalk(st.walkMinutes)} · {st.firstDeparture} · /{st.frequencyMinutes}
+                        {formatWalk(st.walkMinutes)} · {describeStation(st)}
                       </p>
                     </div>
                     <button type="button" class="btn-quiet" onclick={() => openEditStation(loc.id, st)}>
@@ -662,14 +735,47 @@
                   <span>Walk (min)</span>
                   <input class="input" inputmode="numeric" bind:value={draftWalk} />
                 </label>
-                <label class="field">
-                  <span>Starts</span>
-                  <input class="input" type="time" bind:value={draftFirst} />
+                <label class="field field-span">
+                  <span>Timetable</span>
+                  <div class="segment" role="radiogroup" aria-label="Timetable type">
+                    <button
+                      type="button"
+                      class="segment-btn"
+                      aria-pressed={draftScheduleKind === "frequency"}
+                      onclick={() => (draftScheduleKind = "frequency")}
+                    >
+                      Every X min
+                    </button>
+                    <button
+                      type="button"
+                      class="segment-btn"
+                      aria-pressed={draftScheduleKind === "custom"}
+                      onclick={() => (draftScheduleKind = "custom")}
+                    >
+                      Set times
+                    </button>
+                  </div>
                 </label>
-                <label class="field">
-                  <span>Every (min)</span>
-                  <input class="input" inputmode="numeric" bind:value={draftFreq} />
-                </label>
+                {#if draftScheduleKind === "frequency"}
+                  <label class="field">
+                    <span>Starts</span>
+                    <input class="input" type="time" bind:value={draftFirst} />
+                  </label>
+                  <label class="field">
+                    <span>Every (min)</span>
+                    <input class="input" inputmode="numeric" bind:value={draftFreq} />
+                  </label>
+                {:else}
+                  <label class="field field-span">
+                    <span>Departures (HH:MM, comma separated)</span>
+                    <textarea
+                      class="input input-area"
+                      rows="2"
+                      placeholder="e.g. 06:12, 07:05, 18:40"
+                      bind:value={draftCustom}
+                    ></textarea>
+                  </label>
+                {/if}
               </div>
               {#if draftError}
                 <p class="form-error">{draftError}</p>

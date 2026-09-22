@@ -14,7 +14,7 @@
 ## What it does
 
 - Countdown to **leave by** (`transit time − walk time`) and to the next **transit**
-- Multiple locations, each with multiple stations (`walk time + first departure + frequency`)
+- Multiple locations, each with multiple stations (`walk time + first departure + frequency`, or a custom set of times for sparse routes)
 - Flags missed departures and shows the next catchable one
 - Optional "remind me" browser notification when it's time to leave
 - Installable PWA — works offline, data stays in `localStorage`
